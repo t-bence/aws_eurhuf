@@ -1,24 +1,44 @@
 import json
 from eurhuf.rate import RateHistory
+from eurhuf.errors import DateParsingError, MissingParameterError, RateNotFoundError
+
+def parse_date_or_error(date_str):
+    if not date_str:
+        raise MissingParameterError("Parameter date is missing")
+    try:
+        return RateHistory.parse_date(date_str)
+    except ValueError:
+        raise DateParsingError("Could not parse date, format must be YYYY-mm-dd")
+
+def get_rate_or_error(rate_history, date):
+    try:
+        return rate_history.get_rate_on(date)
+    except KeyError:
+        raise RateNotFoundError(date)
 
 def lambda_handler(event, context):
     try:
-        date_str = event["queryStringParameters"]["date"]
-    except KeyError:
-        return {"statusCode": 400, "body": "Parameter date is missing"}
-    
-    try:
-        date = RateHistory.parse_date(date_str)
-    except ValueError:
+        date_str = event.get("queryStringParameters", {}).get("date")
+        date = parse_date_or_error(date_str)
+
+        rate_history = RateHistory()
+        rate = get_rate_or_error(rate_history, date)
+        
         return {
-            "statusCode": 422,
-            "body": "Could not parse date, format must be YYYY-mm-dd"
+            "statusCode": 200,
+            "body": json.dumps({
+                "date": str(date),
+                "rate": rate
+            })
         }
     
-    rate_history = RateHistory()
-    try:
-        rate = rate_history.get_rate_on(date)
-    except KeyError:
+    except MissingParameterError as e:
+        return {"statusCode": 400, "body": str(e)}
+    
+    except DateParsingError as e:
+        return {"statusCode": 422, "body": str(e)}
+
+    except RateNotFoundError:
         return {
             "statusCode": 404,
             "body": json.dumps({
@@ -27,15 +47,12 @@ def lambda_handler(event, context):
                 "last_date": str(rate_history.last_date)
             })
         }
+
     except Exception as e:
         return {
-            "statusCode": 400,
-            "body": repr(e)
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": "Internal server error",
+                "details": repr(e)
+            })
         }
-    return {
-        "statusCode": 200,
-        "body": json.dumps({
-            "date": str(date),
-            "rate": rate
-        })
-    }        
