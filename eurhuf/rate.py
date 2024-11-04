@@ -12,15 +12,37 @@ class RateHistory:
     @staticmethod
     def parse_date(date_str: str) -> dt.date:
         return dt.datetime.strptime(date_str, "%Y-%m-%d").date()
+    
+    @staticmethod
+    def previous_day(day: dt.date) -> dt.date:
+        return day - dt.timedelta(days=1)
         
     def get_rate_on(self, date: dt.date) -> float:
+        """Get the rate on a specific day.
+        If the requested day was on a weekend, we get the rate from a day before (iteratively).
+
+        Parameters
+        ----------
+        date : dt.date
+            The day on which we get the EURHUF rate.
+
+        Returns
+        -------
+        float
+            The EURHUF rate.
+
+        Raises
+        ------
+        KeyError
+            If the requested day is out of the range of the stored data.
+        """
         if date < self.first_date:
             raise KeyError
         if date > self.last_date:
             raise KeyError
         if str(date) in self.rates.keys():
             return self.rates[str(date)]
-        return self.get_rate_on(date - dt.timedelta(days=1))
+        return self.get_rate_on(RateHistory.previous_day(date))
         
     def _get_first_last_date(self) -> tuple[str, str]:
         all_dates = list(self.rates.keys())
